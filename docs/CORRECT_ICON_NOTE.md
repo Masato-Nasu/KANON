@@ -1,1 +1,0 @@
-README icon should use the full KANON artwork from the user-provided image.
