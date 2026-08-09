@@ -29,12 +29,6 @@ KANONはAndroidの `AudioPlaybackCapture` で、キャプチャを許可して�
 - API key encrypted with Android Keystore
 - Captured audio is not saved or exported by the app
 
-## What KANON deliberately does not do
-
-KANON started as **REWIND**, an experiment that kept the previous 10 seconds of audio for replay/transcription. During real use, the live-caption layer proved more useful than rewinding.
-
-For KANON, the rewind button, replay function, 10-second audio ring buffer, NOW/FULL mode switching, and related UI were removed. The product is intentionally focused on one thing: **live comprehension**.
-
 ## Requirements
 
 - Android 10 / API 29 or later
