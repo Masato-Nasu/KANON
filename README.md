@@ -5,7 +5,7 @@
 KANON is an Android live-caption layer that turns English audio playing on the device into **live English captions + Japanese translation**, displayed over other apps.
 
 <p align="center">
-  <img src="docs/kanon-icon.svg" width="220" alt="KANON icon">
+  <img src="docs/kanon-icon.png" width="220" alt="KANON icon">
 </p>
 
 ## Concept
