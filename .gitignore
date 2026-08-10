@@ -6,3 +6,9 @@ local.properties
 *.aab
 .idea/
 .DS_Store
+
+# Release signing secrets - never commit these
+keystore.properties
+release-key/
+*.jks
+*.keystore
