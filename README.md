@@ -48,6 +48,8 @@ Current release:
 
 https://github.com/Masato-Nasu/KANON/releases/download/v0.1.0/KANON-v0.1.0.apk
 
+The GitHub Release asset should be the **signed Release APK** produced by the release-build procedure below.
+
 ## Android installation and permissions
 
 KANON is distributed as an APK, so the first launch requires several Android permissions and settings.
@@ -172,16 +174,40 @@ Android has granted the overlay app-op.
 
 > ADB is only a fallback for devices where the normal settings UI does not allow the permission. Most users should not need it.
 
-## Build on Windows 10/11
+## Build a signed Release APK on Windows 10/11
 
-The repository includes a PowerShell 5.1-compatible build helper.
+The repository now includes a release-signing workflow. Signing secrets stay on your PC and are excluded from Git by `.gitignore`.
 
-1. Install Android Studio / Android SDK.
-2. Install Android SDK Platform 35 or newer.
-3. Enable USB debugging if you want automatic installation.
-4. Double-click `BUILD_AND_INSTALL.cmd`.
+### First time only — create the release signing key
 
-The script downloads Gradle 8.11.1 into `.build-tools/` when needed, builds the debug APK, and installs it through ADB when a device is connected.
+1. Install Android Studio / Android SDK and Java 17 or newer.
+2. Double-click `CREATE_RELEASE_KEY.cmd`.
+3. The script creates:
+   - `release-key/kanon-release.jks`
+   - `keystore.properties`
+4. Back up **both files** somewhere safe. The same signing key is required for future KANON updates.
+
+### Build the distributable APK
+
+1. Install Android SDK Platform 35 or newer and Android SDK Build-Tools.
+2. Double-click `BUILD_AND_INSTALL.cmd`.
+3. The script runs `assembleRelease`.
+4. It verifies the generated APK with Android `apksigner`.
+5. When successful, the project root contains:
+
+```text
+KANON-v0.1.0.apk
+```
+
+When the console shows **SIGNED RELEASE BUILD OK**, this is the APK to upload to GitHub Releases.
+
+### If an old Debug APK is already installed
+
+A Debug APK and the new Release APK are signed with different certificates, so Android may reject an in-place update.
+
+If you see `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, uninstall the old KANON once and then install the signed Release APK.
+
+> Uninstalling clears KANON app data, so the OpenAI API key must be entered again. From that point onward, keep using the same KANON release signing key for future versions.
 
 ## First run — quick version
 
