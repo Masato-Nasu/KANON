@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "=== KANON v0.1.0 ===" -ForegroundColor Cyan
+Write-Host "=== KANON v0.1.0 SIGNED RELEASE ===" -ForegroundColor Cyan
 Write-Host ""
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -66,6 +66,15 @@ if (-not $javaCommand) {
 }
 Write-Host "Java: $($javaCommand.Source)"
 
+$propertiesFile = Join-Path $PSScriptRoot "keystore.properties"
+$keyFile = Join-Path $PSScriptRoot "release-key\kanon-release.jks"
+if (-not (Test-Path $propertiesFile) -or -not (Test-Path $keyFile)) {
+    Write-Host ""
+    Write-Host "Release signing key is not configured yet." -ForegroundColor Yellow
+    Write-Host "Double-click CREATE_RELEASE_KEY.cmd once, then run BUILD_AND_INSTALL.cmd again."
+    throw "Release signing files are missing."
+}
+
 $gradleVersion = "8.11.1"
 $tools = Join-Path $PSScriptRoot ".build-tools"
 $gradleHome = Join-Path $tools "gradle-$gradleVersion"
@@ -81,45 +90,81 @@ if (-not (Test-Path $gradleExe)) {
     Remove-Item $zip -Force
 }
 
+$apksigner = $null
+$buildToolsDir = Join-Path $sdk "build-tools"
+if (Test-Path $buildToolsDir) {
+    $buildToolCandidates = @(Get-ChildItem -Path $buildToolsDir -Directory -ErrorAction SilentlyContinue |
+        Sort-Object { try { [version]$_.Name } catch { [version]'0.0' } } -Descending)
+    foreach ($dir in $buildToolCandidates) {
+        $candidate = Join-Path $dir.FullName "apksigner.bat"
+        if (Test-Path $candidate) {
+            $apksigner = $candidate
+            break
+        }
+    }
+}
+if (-not $apksigner) {
+    throw "apksigner.bat was not found in Android SDK build-tools. Install Android SDK Build-Tools."
+}
+
 Push-Location $PSScriptRoot
 try {
     Write-Host ""
-    Write-Host "Building APK..." -ForegroundColor Yellow
-    & $gradleExe --no-daemon assembleDebug
+    Write-Host "Building SIGNED RELEASE APK..." -ForegroundColor Yellow
+    & $gradleExe --no-daemon clean assembleRelease
     if ($LASTEXITCODE -ne 0) {
-        throw "Gradle build failed with exit code $LASTEXITCODE."
+        throw "Gradle release build failed with exit code $LASTEXITCODE."
     }
 
-    $apk = Join-Path $PSScriptRoot "app\build\outputs\apk\debug\app-debug.apk"
+    $apk = Join-Path $PSScriptRoot "app\build\outputs\apk\release\app-release.apk"
     if (-not (Test-Path $apk)) {
-        throw "APK not found after build: $apk"
+        throw "Signed release APK not found: $apk"
     }
 
     $out = Join-Path $PSScriptRoot "KANON-v0.1.0.apk"
     Copy-Item $apk $out -Force
+
     Write-Host ""
-    Write-Host "BUILD OK: $out" -ForegroundColor Green
+    Write-Host "Verifying APK signature..." -ForegroundColor Yellow
+    & $apksigner verify --verbose --print-certs $out
+    if ($LASTEXITCODE -ne 0) {
+        throw "APK signature verification failed. Do NOT publish this APK."
+    }
+
+    Write-Host ""
+    Write-Host "SIGNED RELEASE BUILD OK" -ForegroundColor Green
+    Write-Host "APK: $out" -ForegroundColor Green
+    Write-Host "This is the file to upload to GitHub Releases." -ForegroundColor Green
 
     $adb = Join-Path $sdk "platform-tools\adb.exe"
     if (-not (Test-Path $adb)) {
-        Write-Host "ADB was not found. Copy the APK to your Android phone and install it manually." -ForegroundColor Yellow
+        Write-Host "ADB was not found. The signed release APK is still ready for distribution." -ForegroundColor Yellow
         exit 0
     }
 
     $devices = & $adb devices
     $connected = @($devices | Select-String "`tdevice$")
     if ($connected.Count -gt 0) {
-        Write-Host "Android device detected. Installing..." -ForegroundColor Yellow
-        & $adb install -r $out
+        Write-Host ""
+        Write-Host "Android device detected. Installing signed release..." -ForegroundColor Yellow
+        $installOutput = & $adb install -r $out 2>&1
+        $installOutput | ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -eq 0) {
             Write-Host "INSTALL OK" -ForegroundColor Green
             & $adb shell am start -n "jp.masatolab.kanon/.MainActivity" | Out-Null
         } else {
-            Write-Host "ADB install failed. You can still copy the APK to the phone and install it manually." -ForegroundColor Yellow
+            Write-Host ""
+            if (($installOutput -join "`n") -match "INSTALL_FAILED_UPDATE_INCOMPATIBLE") {
+                Write-Host "The previously installed KANON was signed with a different key (for example the old debug APK)." -ForegroundColor Yellow
+                Write-Host "Uninstall the old KANON from the phone, then run this script again." -ForegroundColor Yellow
+                Write-Host "NOTE: uninstalling clears KANON app data, so the OpenAI API key must be entered again." -ForegroundColor Yellow
+            } else {
+                Write-Host "ADB install failed, but the signed release APK was built and verified successfully." -ForegroundColor Yellow
+            }
         }
     } else {
         Write-Host "No USB-debugging device detected." -ForegroundColor Yellow
-        Write-Host "Copy KANON-v0.1.0.apk to the phone and install it manually."
+        Write-Host "The signed release APK is ready: KANON-v0.1.0.apk"
     }
 }
 finally {
